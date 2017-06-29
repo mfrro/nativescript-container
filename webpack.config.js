@@ -1,4 +1,4 @@
-const { resolve, join } = require("path");
+const { resolve, join  } = require("path");
 
 const webpack = require("webpack");
 const nsWebpack = require("nativescript-dev-webpack");
@@ -31,7 +31,7 @@ module.exports = env => {
     const plugins = getPlugins(platform, env);
     const extensions = getExtensions(platform);
 
-    return {
+    const config = {
         context: resolve("./app"),
         target: nativescriptTarget,
         entry,
@@ -60,13 +60,26 @@ module.exports = env => {
         module: { rules },
         plugins,
     };
+
+    if (env.snapshot) {
+        plugins.push(new nsWebpack.NativeScriptSnapshotPlugin({
+            chunk: "vendor",
+            projectRoot: __dirname,
+            webpackConfig: config,
+            targetArchs: ["arm", "arm64", "ia32"],
+            tnsJavaClassesOptions: { packages: ["tns-core-modules" ] },
+            useLibs: false
+        }));
+    }
+
+    return config;
 };
 
 
 function getPlatform(env) {
     return env.android ? "android" :
         env.ios ? "ios" :
-            () => { throw new Error("You need to provide a target platform!") };
+        () => { throw new Error("You need to provide a target platform!") };
 }
 
 function getRules() {
@@ -85,7 +98,10 @@ function getRules() {
                     loader: "resolve-url-loader",
                     options: { silent: true },
                 },
-                "nativescript-css-loader",
+                {
+                    loader: "nativescript-css-loader",
+                    options: { minimize: false }
+                },
                 "nativescript-dev-webpack/platform-css-loader",
             ]),
         },
@@ -113,7 +129,7 @@ function getRules() {
             test: /\.ts$/,
             loaders: [
                 "nativescript-dev-webpack/tns-aot-loader",
-                "@ngtools/webpack"
+                "@ngtools/webpack",
             ]
         }
 
@@ -157,11 +173,12 @@ function getPlugins(platform, env) {
             typeChecking: false
         }),
 
-        // Resolve .ios.css and .android.css component stylesheets
-        new nsWebpack.StyleUrlResolvePlugin({ platform }),
-
-        // stop any locale being bundled with moment
-        new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/)
+        // Resolve .ios.css and .android.css component stylesheets, and .ios.html and .android component views
+        new nsWebpack.UrlResolvePlugin({
+            platform: platform,
+            resolveStylesUrls: true,
+            resolveTemplateUrl: true
+        }),
 
     ];
 
